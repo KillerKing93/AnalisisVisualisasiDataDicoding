@@ -286,7 +286,7 @@ with tabs[1]:
         
         st.subheader("Distribusi Konsentrasi PM2.5")
         fig, ax = plt.subplots(figsize=(8, 5))
-        sns.histplot(filtered_data['PM2.5'].dropna(), bins=30, kde=True, ax=ax, color='blue')
+        sns.histplot(filtered_data['PM2.5'], bins=30, kde=True, ax=ax, color='blue')
         ax.set_xlabel("Konsentrasi PM2.5 (µg/m³)")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
@@ -316,7 +316,7 @@ with tabs[1]:
         
         st.subheader("Distribusi Konsentrasi PM10")
         fig, ax = plt.subplots(figsize=(8, 5))
-        sns.histplot(filtered_data['PM10'].dropna(), bins=30, kde=True, ax=ax, color='green')
+        sns.histplot(filtered_data['PM10'], bins=30, kde=True, ax=ax, color='green')
         ax.set_xlabel("Konsentrasi PM10 (µg/m³)")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
@@ -347,8 +347,8 @@ with tabs[1]:
         
         st.subheader("Distribusi Konsentrasi PM2.5 dan PM10")
         fig, ax = plt.subplots(figsize=(8, 5))
-        sns.histplot(filtered_data['PM2.5'].dropna(), bins=30, kde=True, ax=ax, color='blue', label='PM2.5', alpha=0.5)
-        sns.histplot(filtered_data['PM10'].dropna(), bins=30, kde=True, ax=ax, color='green', label='PM10', alpha=0.5)
+        sns.histplot(filtered_data['PM2.5'], bins=30, kde=True, ax=ax, color='blue', label='PM2.5', alpha=0.5)
+        sns.histplot(filtered_data['PM10'], bins=30, kde=True, ax=ax, color='green', label='PM10', alpha=0.5)
         ax.set_xlabel("Konsentrasi (µg/m³)")
         ax.legend()
         ax.tick_params(axis='x', rotation=45)
