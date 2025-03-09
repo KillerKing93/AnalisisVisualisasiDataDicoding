@@ -79,7 +79,7 @@ st.sidebar.write("Dibuat oleh: Alif Nurhidayat\nEmail: alifnurhidayatwork@gmail.
 # -----------------------------------------------------------------------------------
 # 3. Peta Geospasial Konsentrasi PM2.5
 # -----------------------------------------------------------------------------------
-st.subheader("Peta Konsentrasi PM2.5")
+st.subheader("Peta Lokasi Stasiun")
 center_lat, center_lon = coords[selected_station]
 m = folium.Map(location=[center_lat, center_lon], zoom_start=10)
 for stasiun_name, group in date_filtered.groupby('stasiun'):
