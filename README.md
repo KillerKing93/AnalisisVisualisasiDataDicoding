@@ -23,7 +23,9 @@ Di direktori root proyek, buat virtual environment dengan perintah berikut:
 
 ```bash
 python3 -m venv venv
-- atau
+
+       atau
+
 python -m venv venv
 ```
 
