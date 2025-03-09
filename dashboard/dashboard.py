@@ -48,6 +48,9 @@ def load_data():
 # Memuat data dengan caching
 data = load_data()
 
+# **Pisahkan data per stasiun ke dalam dictionary**
+station_data_dict = {station: group for station, group in data.groupby('stasiun')}
+
 # -----------------------------------------------------------------------------------
 # 2. Sidebar: Pilihan Filter Data
 # -----------------------------------------------------------------------------------
@@ -61,14 +64,20 @@ selected_station = st.sidebar.selectbox("Pilih Stasiun", data['stasiun'].unique(
 tanggal_mulai = st.sidebar.date_input("Tanggal Mulai", value=data['tanggal'].min())
 tanggal_akhir = st.sidebar.date_input("Tanggal Akhir", value=data['tanggal'].max())
 
+# Ambil data stasiun yang dipilih dari dictionary
+selected_station_data = station_data_dict[selected_station]
+
+# Filter data berdasarkan tanggal untuk stasiun yang dipilih
+filtered_data = selected_station_data[
+    (selected_station_data['tanggal'] >= pd.to_datetime(tanggal_mulai)) &
+    (selected_station_data['tanggal'] <= pd.to_datetime(tanggal_akhir))
+]
+
 # Filter data berdasarkan tanggal saja (untuk perbandingan antar stasiun)
 date_filtered = data[
     (data['tanggal'] >= pd.to_datetime(tanggal_mulai)) &
     (data['tanggal'] <= pd.to_datetime(tanggal_akhir))
 ]
-
-# Filter data berdasarkan stasiun dan tanggal (untuk visualisasi Tab 1 & 2)
-filtered_data = date_filtered[date_filtered['stasiun'] == selected_station]
 
 # Informasi tambahan di sidebar
 st.sidebar.write("Peringatan! Hanya dapat bekerja jika venv dieksekusi di root!")
@@ -78,7 +87,7 @@ st.sidebar.write("Dibuat oleh: Alif Nurhidayat\nEmail: alifnurhidayatwork@gmail.
 # 3. Peta Geospasial Konsentrasi PM2.5
 # -----------------------------------------------------------------------------------
 st.subheader("Peta Lokasi Stasiun")
-center_lat, center_lon = data[data['stasiun'] == selected_station][['latitude', 'longitude']].iloc[0]
+center_lat, center_lon = station_data_dict[selected_station][['latitude', 'longitude']].iloc[0]
 m = folium.Map(location=[center_lat, center_lon], zoom_start=10)
 for stasiun_name, group in date_filtered.groupby('stasiun'):
     avg_pm25 = group['PM2.5'].mean()
