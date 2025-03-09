@@ -59,18 +59,17 @@ selected_station = st.sidebar.selectbox("Pilih Stasiun", data['stasiun'].unique(
 tanggal_mulai = st.sidebar.date_input("Tanggal Mulai", value=data['tanggal'].min())
 tanggal_akhir = st.sidebar.date_input("Tanggal Akhir", value=data['tanggal'].max())
 
-# Filter data berdasarkan pilihan stasiun dan rentang tanggal (untuk visualisasi di Tab 1 & 2)
-filtered_data = data[
-    (data['stasiun'] == selected_station) &
-    (data['tanggal'] >= pd.to_datetime(tanggal_mulai)) &
-    (data['tanggal'] <= pd.to_datetime(tanggal_akhir))
-]
-
-# Filter data berdasarkan tanggal saja (untuk perbandingan antar stasiun)
+# Lakukan filter data berdasarkan tanggal satu kali saja
 date_filtered = data[
     (data['tanggal'] >= pd.to_datetime(tanggal_mulai)) &
     (data['tanggal'] <= pd.to_datetime(tanggal_akhir))
 ]
+
+# Buat dictionary data per stasiun berdasarkan data yang sudah difilter tanggal
+stations_filtered = {st: group for st, group in date_filtered.groupby('stasiun')}
+
+# Ambil data untuk stasiun yang dipilih
+selected_data = stations_filtered.get(selected_station, pd.DataFrame())
 
 # Menampilkan direktori kerja saat ini
 st.sidebar.write("Peringatan! hanya dapat bekerja jika venv dieksekusi di root!")
@@ -111,7 +110,7 @@ with tabs[0]:
     col1, col2 = st.columns(2)
     with col1:
         st.write("**Proporsi Rata-rata PM2.5 & PM10**")
-        avg_pm = filtered_data[['PM2.5', 'PM10']].mean()
+        avg_pm = selected_data[['PM2.5', 'PM10']].mean()
         fig, ax = plt.subplots()
         ax.pie(avg_pm, labels=avg_pm.index, autopct='%1.1f%%', startangle=90)
         ax.axis('equal')
@@ -121,7 +120,7 @@ with tabs[0]:
     with col2:
         st.write("**Proporsi Rata-rata Polutan Lainnya**")
         pollutants = ['NO2', 'SO2', 'CO', 'O3']
-        avg_pollutants = filtered_data[pollutants].mean()
+        avg_pollutants = selected_data[pollutants].mean()
         fig, ax = plt.subplots()
         ax.pie(avg_pollutants, labels=avg_pollutants.index, autopct='%1.1f%%', startangle=90)
         ax.axis('equal')
@@ -130,14 +129,14 @@ with tabs[0]:
     
     # Statistik deskriptif untuk PM2.5 dan PM10
     stats_pm = pd.concat([
-        filtered_data['PM2.5'].describe().rename('PM2.5'),
-        filtered_data['PM10'].describe().rename('PM10')
+        selected_data['PM2.5'].describe().rename('PM2.5'),
+        selected_data['PM10'].describe().rename('PM10')
     ], axis=1)
     
     # Heatmap korelasi polutan
     st.subheader("Heatmap Korelasi Polutan")
     pollutants_all = ['PM2.5', 'PM10', 'NO2', 'SO2', 'CO', 'O3']
-    corr = filtered_data[pollutants_all].corr()
+    corr = selected_data[pollutants_all].corr()
     fig, ax = plt.subplots(figsize=(8, 6))
     sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax)
     ax.tick_params(axis='x', rotation=45)
@@ -147,11 +146,11 @@ with tabs[0]:
     st.write("**Statistik Deskriptif PM2.5 & PM10**")
     st.dataframe(stats_pm)
     
-    stats_pollutants = filtered_data[pollutants].describe().T
+    stats_pollutants = selected_data[pollutants].describe().T
     
     # Facet Plot tren polutan
     st.subheader("Facet Plot Tren Polutan")
-    df_melt = filtered_data[['tanggal'] + pollutants_all].melt(id_vars='tanggal', var_name='Pollutant', value_name='Concentration')
+    df_melt = selected_data[['tanggal'] + pollutants_all].melt(id_vars='tanggal', var_name='Pollutant', value_name='Concentration')
     g = sns.FacetGrid(df_melt, col="Pollutant", col_wrap=3, height=3, sharex=True, sharey=False)
     g.map(sns.lineplot, "tanggal", "Concentration")
     g.set_axis_labels("Tanggal", "Konsentrasi")
@@ -189,12 +188,12 @@ with tabs[0]:
                              ['Box Plot', 'Bar Plot', 'Line Plot', 'Heatmap', 'Pola Musiman', 'Pola Harian'])
     
     # Menentukan jenis hari (Hari Kerja vs Akhir Pekan)
-    filtered_data['hari'] = filtered_data['tanggal'].dt.dayofweek
-    filtered_data['jenis_hari'] = filtered_data['hari'].apply(lambda x: 'Akhir Pekan' if x >= 5 else 'Hari Kerja')
+    selected_data['hari'] = selected_data['tanggal'].dt.dayofweek
+    selected_data['jenis_hari'] = selected_data['hari'].apply(lambda x: 'Akhir Pekan' if x >= 5 else 'Hari Kerja')
     
     if plot_type == 'Box Plot':
         fig, ax = plt.subplots(figsize=(8, 5))
-        sns.boxplot(x='jenis_hari', y=pollutant, data=filtered_data, 
+        sns.boxplot(x='jenis_hari', y=pollutant, data=selected_data, 
                     palette={'Hari Kerja': 'lightblue', 'Akhir Pekan': 'orange'}, ax=ax)
         ax.set_xlabel("Jenis Hari")
         ax.set_ylabel(f"Konsentrasi {pollutant} (µg/m³)")
@@ -204,7 +203,7 @@ with tabs[0]:
     
     elif plot_type == 'Bar Plot':
         fig, ax = plt.subplots(figsize=(8, 5))
-        sns.barplot(x='jenis_hari', y=pollutant, data=filtered_data, 
+        sns.barplot(x='jenis_hari', y=pollutant, data=selected_data, 
                     palette={'Hari Kerja': 'lightblue', 'Akhir Pekan': 'orange'}, ax=ax)
         ax.set_xlabel("Jenis Hari")
         ax.set_ylabel(f"Rata-rata {pollutant} (µg/m³)")
@@ -215,7 +214,7 @@ with tabs[0]:
     elif plot_type == 'Line Plot':
         st.subheader(f"Tren Konsentrasi {pollutant} Seiring Waktu")
         fig, ax = plt.subplots(figsize=(10, 5))
-        sns.lineplot(x='tanggal', y=pollutant, hue='jenis_hari', data=filtered_data, 
+        sns.lineplot(x='tanggal', y=pollutant, hue='jenis_hari', data=selected_data, 
                      palette={'Hari Kerja': 'lightblue', 'Akhir Pekan': 'orange'}, ax=ax)
         ax.set_xlabel("Tanggal")
         ax.set_ylabel(f"Konsentrasi {pollutant} (µg/m³)")
@@ -226,8 +225,8 @@ with tabs[0]:
     
     elif plot_type == 'Heatmap':
         st.subheader(f"Heatmap Rata-rata {pollutant} per Jam")
-        filtered_data['jam'] = filtered_data['tanggal'].dt.hour
-        heatmap_data = filtered_data.pivot_table(values=pollutant, index='jam', columns='jenis_hari', aggfunc='mean')
+        selected_data['jam'] = selected_data['tanggal'].dt.hour
+        heatmap_data = selected_data.pivot_table(values=pollutant, index='jam', columns='jenis_hari', aggfunc='mean')
         fig, ax = plt.subplots(figsize=(8, 6))
         sns.heatmap(heatmap_data, cmap='YlOrRd', annot=True, fmt='.1f', ax=ax)
         ax.set_xlabel("Jenis Hari")
@@ -238,9 +237,9 @@ with tabs[0]:
     
     elif plot_type == 'Pola Musiman':
         st.subheader(f"Pola Musiman Konsentrasi {pollutant}")
-        filtered_data['bulan'] = filtered_data['tanggal'].dt.month
+        selected_data['bulan'] = selected_data['tanggal'].dt.month
         fig, ax = plt.subplots(figsize=(10, 5))
-        sns.lineplot(x='bulan', y=pollutant, data=filtered_data, estimator='mean', ci=None, ax=ax)
+        sns.lineplot(x='bulan', y=pollutant, data=selected_data, estimator='mean', ci=None, ax=ax)
         ax.set_xlabel("Bulan")
         ax.set_ylabel(f"Rata-rata {pollutant} (µg/m³)")
         ax.tick_params(axis='x', rotation=45)
@@ -249,8 +248,8 @@ with tabs[0]:
     
     elif plot_type == 'Pola Harian':
         st.subheader(f"Pola Harian Konsentrasi {pollutant}")
-        filtered_data['jam'] = filtered_data['tanggal'].dt.hour
-        heatmap_data = filtered_data.pivot_table(values=pollutant, index='jam', aggfunc='mean')
+        selected_data['jam'] = selected_data['tanggal'].dt.hour
+        heatmap_data = selected_data.pivot_table(values=pollutant, index='jam', aggfunc='mean')
         fig, ax = plt.subplots(figsize=(8, 6))
         sns.heatmap(heatmap_data, cmap='YlOrRd', annot=True, fmt='.1f', ax=ax)
         ax.set_xlabel(f"Konsentrasi Rata-rata {pollutant} (µg/m³)")
@@ -269,7 +268,7 @@ with tabs[1]:
     if option == "PM2.5":
         st.subheader("Tren Konsentrasi PM2.5")
         fig, ax = plt.subplots(figsize=(10, 5))
-        sns.lineplot(x='tanggal', y='PM2.5', data=filtered_data, ax=ax, label='PM2.5', color='blue')
+        sns.lineplot(x='tanggal', y='PM2.5', data=selected_data, ax=ax, label='PM2.5', color='blue')
         ax.set_xlabel("Tanggal")
         ax.set_ylabel("Konsentrasi PM2.5 (µg/m³)")
         ax.legend()
@@ -279,7 +278,7 @@ with tabs[1]:
         
         st.subheader("Distribusi Konsentrasi PM2.5")
         fig, ax = plt.subplots(figsize=(8, 5))
-        sns.histplot(filtered_data['PM2.5'].dropna(), bins=30, kde=True, ax=ax, color='blue')
+        sns.histplot(selected_data['PM2.5'].dropna(), bins=30, kde=True, ax=ax, color='blue')
         ax.set_xlabel("Konsentrasi PM2.5 (µg/m³)")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
@@ -290,7 +289,7 @@ with tabs[1]:
         n_cols = len(met_vars)
         fig, axes = plt.subplots(1, n_cols, figsize=(4*n_cols, 4))
         for i, var in enumerate(met_vars):
-            sns.scatterplot(x=var, y='PM2.5', data=filtered_data, ax=axes[i], color='blue')
+            sns.scatterplot(x=var, y='PM2.5', data=selected_data, ax=axes[i], color='blue')
             axes[i].set_title(f"{var} vs PM2.5")
             axes[i].tick_params(axis='x', rotation=45)
         plt.tight_layout()
@@ -299,7 +298,7 @@ with tabs[1]:
     elif option == "PM10":
         st.subheader("Tren Konsentrasi PM10")
         fig, ax = plt.subplots(figsize=(10, 5))
-        sns.lineplot(x='tanggal', y='PM10', data=filtered_data, ax=ax, label='PM10', color='green')
+        sns.lineplot(x='tanggal', y='PM10', data=selected_data, ax=ax, label='PM10', color='green')
         ax.set_xlabel("Tanggal")
         ax.set_ylabel("Konsentrasi PM10 (µg/m³)")
         ax.legend()
@@ -309,7 +308,7 @@ with tabs[1]:
         
         st.subheader("Distribusi Konsentrasi PM10")
         fig, ax = plt.subplots(figsize=(8, 5))
-        sns.histplot(filtered_data['PM10'].dropna(), bins=30, kde=True, ax=ax, color='green')
+        sns.histplot(selected_data['PM10'].dropna(), bins=30, kde=True, ax=ax, color='green')
         ax.set_xlabel("Konsentrasi PM10 (µg/m³)")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
@@ -320,7 +319,7 @@ with tabs[1]:
         n_cols = len(met_vars)
         fig, axes = plt.subplots(1, n_cols, figsize=(4*n_cols, 4))
         for i, var in enumerate(met_vars):
-            sns.scatterplot(x=var, y='PM10', data=filtered_data, ax=axes[i], color='green')
+            sns.scatterplot(x=var, y='PM10', data=selected_data, ax=axes[i], color='green')
             axes[i].set_title(f"{var} vs PM10")
             axes[i].tick_params(axis='x', rotation=45)
         plt.tight_layout()
@@ -329,8 +328,8 @@ with tabs[1]:
     elif option == "PM2.5 & PM10":
         st.subheader("Tren Konsentrasi PM2.5 dan PM10")
         fig, ax = plt.subplots(figsize=(10, 5))
-        sns.lineplot(x='tanggal', y='PM2.5', data=filtered_data, ax=ax, label='PM2.5', color='blue')
-        sns.lineplot(x='tanggal', y='PM10', data=filtered_data, ax=ax, label='PM10', color='green')
+        sns.lineplot(x='tanggal', y='PM2.5', data=selected_data, ax=ax, label='PM2.5', color='blue')
+        sns.lineplot(x='tanggal', y='PM10', data=selected_data, ax=ax, label='PM10', color='green')
         ax.set_xlabel("Tanggal")
         ax.set_ylabel("Konsentrasi (µg/m³)")
         ax.legend()
@@ -340,8 +339,8 @@ with tabs[1]:
         
         st.subheader("Distribusi Konsentrasi PM2.5 dan PM10")
         fig, ax = plt.subplots(figsize=(8, 5))
-        sns.histplot(filtered_data['PM2.5'].dropna(), bins=30, kde=True, ax=ax, color='blue', label='PM2.5', alpha=0.5)
-        sns.histplot(filtered_data['PM10'].dropna(), bins=30, kde=True, ax=ax, color='green', label='PM10', alpha=0.5)
+        sns.histplot(selected_data['PM2.5'].dropna(), bins=30, kde=True, ax=ax, color='blue', label='PM2.5', alpha=0.5)
+        sns.histplot(selected_data['PM10'].dropna(), bins=30, kde=True, ax=ax, color='green', label='PM10', alpha=0.5)
         ax.set_xlabel("Konsentrasi (µg/m³)")
         ax.legend()
         ax.tick_params(axis='x', rotation=45)
@@ -355,7 +354,7 @@ with tabs[1]:
         for i, pol in enumerate(['PM2.5', 'PM10']):
             for j, var in enumerate(met_vars):
                 color = 'blue' if pol == 'PM2.5' else 'green'
-                sns.scatterplot(x=var, y=pol, data=filtered_data, ax=axes[i, j], color=color)
+                sns.scatterplot(x=var, y=pol, data=selected_data, ax=axes[i, j], color=color)
                 axes[i, j].set_title(f"{var} vs {pol}")
                 axes[i, j].tick_params(axis='x', rotation=45)
         plt.tight_layout()
@@ -370,7 +369,7 @@ with tabs[1]:
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(4*n_cols, 4*n_rows))
         for i, met in enumerate(met_vars):
             for j, pol in enumerate(pollutants_other):
-                sns.scatterplot(x=met, y=pol, data=filtered_data, ax=axes[i, j])
+                sns.scatterplot(x=met, y=pol, data=selected_data, ax=axes[i, j])
                 axes[i, j].set_title(f"{met} vs {pol}")
                 axes[i, j].tick_params(axis='x', rotation=45)
         plt.tight_layout()
