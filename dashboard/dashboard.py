@@ -21,36 +21,38 @@ import os
 # 1. Pemuatan Data dan Persiapan
 # -----------------------------------------------------------------------------------
 
-# Memuat dataset
-data = pd.read_csv('./dashboard/PSRA_Data_SemuaStasiun.csv')
+@st.cache_data
+def load_data():
+    """Memuat dan mempersiapkan data dari file CSV."""
+    data = pd.read_csv('./dashboard/PSRA_Data_SemuaStasiun.csv')
+    data.rename(columns={'datetime': 'tanggal', 'station': 'stasiun'}, inplace=True)
+    data['tanggal'] = pd.to_datetime(data['tanggal'])
+    coords = {
+        'Aotizhongxin': (25.982070730427132, 117.45514627560887),
+        'Changping': (40.220773648721526, 116.22458346928182),
+        'Dingling': (40.29608173026575, 116.22351026646444),
+        'Dongsi': (39.93205741673973, 116.43419736174938),
+        'Guanyuan': (32.44985723335085, 105.87975278857984),
+        'Gucheng': (26.86786447702828, 100.27761232290194),
+        'Huairou': (40.30923966919258, 116.66964440378989),
+        'Nongzhanguan': (39.93562032913985, 116.46753727846819),
+        'Shunyi': (40.15491661940465, 116.54192610220052),
+        'Tiantan': (39.89078817042267, 116.39886221016597),
+        'Wanliu': (39.99950871850554, 116.25689305717239),
+        'Wanshouxigong': (39.909282001378656, 116.26337498325312)
+    }
+    data['latitude'] = data['stasiun'].map(lambda x: coords[x][0])
+    data['longitude'] = data['stasiun'].map(lambda x: coords[x][1])
+    return data
 
-# Ubah nama kolom agar lebih deskriptif
-data.rename(columns={'datetime': 'tanggal', 'station': 'stasiun'}, inplace=True)
-data['tanggal'] = pd.to_datetime(data['tanggal'])
-
-# Menambahkan koordinat stasiun
-coords = {
-    'Aotizhongxin': (25.982070730427132, 117.45514627560887),
-    'Changping': (40.220773648721526, 116.22458346928182),
-    'Dingling': (40.29608173026575, 116.22351026646444),
-    'Dongsi': (39.93205741673973, 116.43419736174938),
-    'Guanyuan': (32.44985723335085, 105.87975278857984),
-    'Gucheng': (26.86786447702828, 100.27761232290194),
-    'Huairou': (40.30923966919258, 116.66964440378989),
-    'Nongzhanguan': (39.93562032913985, 116.46753727846819),
-    'Shunyi': (40.15491661940465, 116.54192610220052),
-    'Tiantan': (39.89078817042267, 116.39886221016597),
-    'Wanliu': (39.99950871850554, 116.25689305717239),
-    'Wanshouxigong': (39.909282001378656, 116.26337498325312)
-}
-data['latitude'] = data['stasiun'].map(lambda x: coords[x][0])
-data['longitude'] = data['stasiun'].map(lambda x: coords[x][1])
+# Memuat data dengan caching
+data = load_data()
 
 # -----------------------------------------------------------------------------------
 # 2. Sidebar: Pilihan Filter Data
 # -----------------------------------------------------------------------------------
 
-# Tambahkan gambar stasiun di atas sidebar
+# Tambahkan gambar stasiun di sidebar
 cols = st.sidebar.columns([1, 2, 1])
 cols[1].image("./images/station.png", width=110)
 
@@ -59,32 +61,28 @@ selected_station = st.sidebar.selectbox("Pilih Stasiun", data['stasiun'].unique(
 tanggal_mulai = st.sidebar.date_input("Tanggal Mulai", value=data['tanggal'].min())
 tanggal_akhir = st.sidebar.date_input("Tanggal Akhir", value=data['tanggal'].max())
 
-# Filter data berdasarkan pilihan stasiun dan rentang tanggal (untuk visualisasi di Tab 1 & 2)
-filtered_data = data[
-    (data['stasiun'] == selected_station) &
-    (data['tanggal'] >= pd.to_datetime(tanggal_mulai)) &
-    (data['tanggal'] <= pd.to_datetime(tanggal_akhir))
-]
-
 # Filter data berdasarkan tanggal saja (untuk perbandingan antar stasiun)
 date_filtered = data[
     (data['tanggal'] >= pd.to_datetime(tanggal_mulai)) &
     (data['tanggal'] <= pd.to_datetime(tanggal_akhir))
 ]
 
-# Menampilkan direktori kerja saat ini
-st.sidebar.write("Peringatan! hanya dapat bekerja jika venv dieksekusi di root!")
+# Filter data berdasarkan stasiun dan tanggal (untuk visualisasi Tab 1 & 2)
+filtered_data = date_filtered[date_filtered['stasiun'] == selected_station]
+
+# Informasi tambahan di sidebar
+st.sidebar.write("Peringatan! Hanya dapat bekerja jika venv dieksekusi di root!")
 st.sidebar.write("Dibuat oleh: Alif Nurhidayat\nEmail: alifnurhidayatwork@gmail.com")
 
 # -----------------------------------------------------------------------------------
 # 3. Peta Geospasial Konsentrasi PM2.5
 # -----------------------------------------------------------------------------------
 st.subheader("Peta Lokasi Stasiun")
-center_lat, center_lon = coords[selected_station]
+center_lat, center_lon = data[data['stasiun'] == selected_station][['latitude', 'longitude']].iloc[0]
 m = folium.Map(location=[center_lat, center_lon], zoom_start=10)
 for stasiun_name, group in date_filtered.groupby('stasiun'):
     avg_pm25 = group['PM2.5'].mean()
-    lat, lon = coords[stasiun_name]
+    lat, lon = group[['latitude', 'longitude']].iloc[0]
     color = 'orange' if stasiun_name == selected_station else 'red'
     folium.CircleMarker(
         location=[lat, lon],
