@@ -18,15 +18,36 @@ import os
 # -----------------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------------
-# 1. Pemuatan Data dan Persiapan
+# Fungsi-fungsi dengan caching untuk optimisasi
 # -----------------------------------------------------------------------------------
 
-# Memuat dataset
-data = pd.read_csv('./dashboard/PSRA_Data_SemuaStasiun.csv')
+@st.cache_data
+def load_data(filepath):
+    data = pd.read_csv(filepath)
+    data.rename(columns={'datetime': 'tanggal', 'station': 'stasiun'}, inplace=True)
+    data['tanggal'] = pd.to_datetime(data['tanggal'])
+    return data
 
-# Ubah nama kolom agar lebih deskriptif
-data.rename(columns={'datetime': 'tanggal', 'station': 'stasiun'}, inplace=True)
-data['tanggal'] = pd.to_datetime(data['tanggal'])
+@st.cache_data
+def filter_data(data, start_date, end_date):
+    start_date = pd.to_datetime(start_date)
+    end_date = pd.to_datetime(end_date)
+    return data[(data['tanggal'] >= start_date) & (data['tanggal'] <= end_date)]
+
+@st.cache_data
+def get_sample(data, n=1000):
+    return data.sample(n, random_state=42)
+
+@st.cache_data
+def get_stations_filtered(data, start_date, end_date):
+    filtered = filter_data(data, start_date, end_date)
+    stations_filtered = {st: group for st, group in filtered.groupby('stasiun')}
+    return filtered, stations_filtered
+
+# -----------------------------------------------------------------------------------
+# 1. Pemuatan Data dan Persiapan
+# -----------------------------------------------------------------------------------
+data = load_data('./dashboard/PSRA_Data_SemuaStasiun.csv')
 
 # Menambahkan koordinat stasiun
 coords = {
@@ -49,8 +70,6 @@ data['longitude'] = data['stasiun'].map(lambda x: coords[x][1])
 # -----------------------------------------------------------------------------------
 # 2. Sidebar: Pilihan Filter Data
 # -----------------------------------------------------------------------------------
-
-# Tambahkan gambar stasiun di atas sidebar
 cols = st.sidebar.columns([1, 2, 1])
 cols[1].image("./images/station.png", width=110)
 
@@ -59,19 +78,10 @@ selected_station = st.sidebar.selectbox("Pilih Stasiun", data['stasiun'].unique(
 tanggal_mulai = st.sidebar.date_input("Tanggal Mulai", value=data['tanggal'].min())
 tanggal_akhir = st.sidebar.date_input("Tanggal Akhir", value=data['tanggal'].max())
 
-# Lakukan filter data berdasarkan tanggal satu kali saja
-date_filtered = data[
-    (data['tanggal'] >= pd.to_datetime(tanggal_mulai)) &
-    (data['tanggal'] <= pd.to_datetime(tanggal_akhir))
-]
+# Filter data dan buat dictionary per stasiun (menggunakan caching)
+date_filtered, stations_filtered = get_stations_filtered(data, tanggal_mulai, tanggal_akhir)
+selected_data = stations_filtered.get(selected_station, pd.DataFrame()).copy()
 
-# Buat dictionary data per stasiun berdasarkan data yang sudah difilter tanggal
-stations_filtered = {st: group for st, group in date_filtered.groupby('stasiun')}
-
-# Ambil data untuk stasiun yang dipilih
-selected_data = stations_filtered.get(selected_station, pd.DataFrame())
-
-# Menampilkan direktori kerja saat ini
 st.sidebar.write("Peringatan! hanya dapat bekerja jika venv dieksekusi di root!")
 st.sidebar.write("Dibuat oleh: Alif Nurhidayat\nEmail: alifnurhidayatwork@gmail.com")
 
@@ -159,9 +169,9 @@ with tabs[0]:
     plt.tight_layout()
     st.pyplot(g.fig)
     
-    # Visualisasi hubungan meteorologi dan polutan (sample data)
+    # Visualisasi hubungan meteorologi dan polutan (menggunakan sample data)
     st.subheader("Visualisasi Hubungan Meteorologi dan Polutan")
-    sample_df = data.sample(1000, random_state=42)
+    sample_df = get_sample(data)
     cols_corr = ['TEMP', 'PRES', 'DEWP', 'WSPM', 'NO2', 'SO2', 'CO']
     pairgrid = sns.pairplot(sample_df[cols_corr])
     pairgrid.fig.suptitle('Pairplot: Faktor Meteorologi vs Polutan (Sample 1000 Baris)', y=1.02)
