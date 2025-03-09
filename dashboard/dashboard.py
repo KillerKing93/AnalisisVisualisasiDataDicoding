@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import stats
 import folium
-from streamlit_folium import folium_static
+from streamlit_folium import st_folium  # Impor yang diperbarui
 import os
 
 # -----------------------------------------------------------------------------------
@@ -48,7 +48,7 @@ def load_data():
 # Memuat data dengan caching
 data = load_data()
 
-# **Pisahkan data per stasiun ke dalam dictionary**
+# Pisahkan data per stasiun ke dalam dictionary
 station_data_dict = {station: group for station, group in data.groupby('stasiun')}
 
 # -----------------------------------------------------------------------------------
@@ -67,11 +67,11 @@ tanggal_akhir = st.sidebar.date_input("Tanggal Akhir", value=data['tanggal'].max
 # Ambil data stasiun yang dipilih dari dictionary
 selected_station_data = station_data_dict[selected_station]
 
-# Filter data berdasarkan tanggal untuk stasiun yang dipilih
+# Filter data berdasarkan tanggal untuk stasiun yang dipilih dan buat salinan
 filtered_data = selected_station_data[
     (selected_station_data['tanggal'] >= pd.to_datetime(tanggal_mulai)) &
     (selected_station_data['tanggal'] <= pd.to_datetime(tanggal_akhir))
-]
+].copy()  # Ditambahkan .copy() untuk menghindari SettingWithCopyWarning
 
 # Filter data berdasarkan tanggal saja (untuk perbandingan antar stasiun)
 date_filtered = data[
@@ -101,7 +101,7 @@ for stasiun_name, group in date_filtered.groupby('stasiun'):
         fill=True,
         fill_color=color
     ).add_to(m)
-folium_static(m)
+st_folium(m, width=700, height=500)  # Mengganti folium_static dengan st_folium
 
 # -----------------------------------------------------------------------------------
 # 4. Tab Visualisasi
@@ -124,7 +124,8 @@ with tabs[0]:
         ax.axis('equal')
         plt.tight_layout()
         st.pyplot(fig)
-        
+        plt.close(fig)  # Tutup figure untuk menghemat memori
+    
     with col2:
         st.write("**Proporsi Rata-rata Polutan Lainnya**")
         pollutants = ['NO2', 'SO2', 'CO', 'O3']
@@ -134,6 +135,7 @@ with tabs[0]:
         ax.axis('equal')
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     # Statistik deskriptif untuk PM2.5 dan PM10
     stats_pm = pd.concat([
@@ -150,6 +152,7 @@ with tabs[0]:
     ax.tick_params(axis='x', rotation=45)
     plt.tight_layout()
     st.pyplot(fig)
+    plt.close(fig)  # Tutup figure untuk menghemat memori
     
     st.write("**Statistik Deskriptif PM2.5 & PM10**")
     st.dataframe(stats_pm)
@@ -166,6 +169,7 @@ with tabs[0]:
         ax.tick_params(axis='x', rotation=45)
     plt.tight_layout()
     st.pyplot(g.fig)
+    plt.close(g.fig)  # Tutup figure untuk menghemat memori
     
     # Visualisasi hubungan meteorologi dan polutan (sample data)
     st.subheader("Visualisasi Hubungan Meteorologi dan Polutan")
@@ -177,6 +181,7 @@ with tabs[0]:
         ax.tick_params(axis='x', rotation=45)
     plt.tight_layout()
     st.pyplot(pairgrid.fig)
+    plt.close(pairgrid.fig)  # Tutup figure untuk menghemat memori
     
     fig, ax = plt.subplots(figsize=(10, 8))
     corr_matrix = sample_df[cols_corr].corr()
@@ -185,6 +190,7 @@ with tabs[0]:
     ax.tick_params(axis='x', rotation=45)
     plt.tight_layout()
     st.pyplot(fig)
+    plt.close(fig)  # Tutup figure untuk menghemat memori
     
     st.write("**Statistik Deskriptif Polutan Lainnya**")
     st.dataframe(stats_pollutants)
@@ -201,23 +207,25 @@ with tabs[0]:
     
     if plot_type == 'Box Plot':
         fig, ax = plt.subplots(figsize=(8, 5))
-        sns.boxplot(x='jenis_hari', y=pollutant, data=filtered_data, 
-                    palette={'Hari Kerja': 'lightblue', 'Akhir Pekan': 'orange'}, ax=ax)
+        sns.boxplot(x='jenis_hari', y=pollutant, hue='jenis_hari', data=filtered_data, 
+                    palette={'Hari Kerja': 'lightblue', 'Akhir Pekan': 'orange'}, ax=ax, legend=False)
         ax.set_xlabel("Jenis Hari")
         ax.set_ylabel(f"Konsentrasi {pollutant} (µg/m³)")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     elif plot_type == 'Bar Plot':
         fig, ax = plt.subplots(figsize=(8, 5))
-        sns.barplot(x='jenis_hari', y=pollutant, data=filtered_data, 
-                    palette={'Hari Kerja': 'lightblue', 'Akhir Pekan': 'orange'}, ax=ax)
+        sns.barplot(x='jenis_hari', y=pollutant, hue='jenis_hari', data=filtered_data, 
+                    palette={'Hari Kerja': 'lightblue', 'Akhir Pekan': 'orange'}, ax=ax, legend=False)
         ax.set_xlabel("Jenis Hari")
         ax.set_ylabel(f"Rata-rata {pollutant} (µg/m³)")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     elif plot_type == 'Line Plot':
         st.subheader(f"Tren Konsentrasi {pollutant} Seiring Waktu")
@@ -230,6 +238,7 @@ with tabs[0]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     elif plot_type == 'Heatmap':
         st.subheader(f"Heatmap Rata-rata {pollutant} per Jam")
@@ -242,17 +251,19 @@ with tabs[0]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     elif plot_type == 'Pola Musiman':
         st.subheader(f"Pola Musiman Konsentrasi {pollutant}")
         filtered_data['bulan'] = filtered_data['tanggal'].dt.month
         fig, ax = plt.subplots(figsize=(10, 5))
-        sns.lineplot(x='bulan', y=pollutant, data=filtered_data, estimator='mean', ci=None, ax=ax)
+        sns.lineplot(x='bulan', y=pollutant, data=filtered_data, estimator='mean', errorbar=None, ax=ax)
         ax.set_xlabel("Bulan")
         ax.set_ylabel(f"Rata-rata {pollutant} (µg/m³)")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     elif plot_type == 'Pola Harian':
         st.subheader(f"Pola Harian Konsentrasi {pollutant}")
@@ -265,6 +276,7 @@ with tabs[0]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
 
 # ===============================================================================
 # Tab 2: Tren & Hubungan
@@ -283,6 +295,7 @@ with tabs[1]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
         
         st.subheader("Distribusi Konsentrasi PM2.5")
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -291,6 +304,7 @@ with tabs[1]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
         
         st.subheader("Hubungan PM2.5 dengan Variabel Meteorologi")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
@@ -302,6 +316,7 @@ with tabs[1]:
             axes[i].tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     elif option == "PM10":
         st.subheader("Tren Konsentrasi PM10")
@@ -313,6 +328,7 @@ with tabs[1]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
         
         st.subheader("Distribusi Konsentrasi PM10")
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -321,6 +337,7 @@ with tabs[1]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
         
         st.subheader("Hubungan PM10 dengan Variabel Meteorologi")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
@@ -332,6 +349,7 @@ with tabs[1]:
             axes[i].tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     elif option == "PM2.5 & PM10":
         st.subheader("Tren Konsentrasi PM2.5 dan PM10")
@@ -344,6 +362,7 @@ with tabs[1]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
         
         st.subheader("Distribusi Konsentrasi PM2.5 dan PM10")
         fig, ax = plt.subplots(figsize=(8, 5))
@@ -354,6 +373,7 @@ with tabs[1]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
         
         st.subheader("Hubungan Variabel Meteorologi dengan PM2.5 dan PM10")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
@@ -367,6 +387,7 @@ with tabs[1]:
                 axes[i, j].tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     elif option == "Dampak Meteorologi vs Polutan Lainnya":
         st.subheader("Hubungan Variabel Meteorologi vs Polutan Lainnya")
@@ -382,6 +403,7 @@ with tabs[1]:
                 axes[i, j].tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
 
 # ===============================================================================
 # Tab 3: Perbandingan Antar Stasiun
@@ -413,6 +435,7 @@ with tabs[2]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     # Menyiapkan palet warna untuk visualisasi perbandingan antar stasiun
     palette = {stn: ('orange' if stn == selected_station else 'lightblue') 
@@ -423,21 +446,23 @@ with tabs[2]:
         if compare_option in ["PM2.5", "Keduanya (PM & Lainnya)"]:
             st.write("**Distribusi PM2.5**")
             fig, ax = plt.subplots(figsize=(10, 5))
-            sns.boxplot(x='stasiun', y='PM2.5', data=date_filtered, palette=palette, ax=ax)
+            sns.boxplot(x='stasiun', y='PM2.5', hue='stasiun', data=date_filtered, palette=palette, ax=ax, legend=False)
             ax.tick_params(axis='x', rotation=45)
             ax.set_xlabel("Stasiun")
             ax.set_ylabel("Konsentrasi PM2.5 (µg/m³)")
             plt.tight_layout()
             st.pyplot(fig)
+            plt.close(fig)  # Tutup figure untuk menghemat memori
         if compare_option in ["PM10", "Keduanya (PM & Lainnya)"]:
             st.write("**Distribusi PM10**")
             fig, ax = plt.subplots(figsize=(10, 5))
-            sns.boxplot(x='stasiun', y='PM10', data=date_filtered, palette=palette, ax=ax)
+            sns.boxplot(x='stasiun', y='PM10', hue='stasiun', data=date_filtered, palette=palette, ax=ax, legend=False)
             ax.tick_params(axis='x', rotation=45)
             ax.set_xlabel("Stasiun")
             ax.set_ylabel("Konsentrasi PM10 (µg/m³)")
             plt.tight_layout()
             st.pyplot(fig)
+            plt.close(fig)  # Tutup figure untuk menghemat memori
     
     # Visualisasi untuk variabel Meteorologi
     if compare_option in ["Meteorologi", "Keduanya (PM & Lainnya)"]:
@@ -445,11 +470,12 @@ with tabs[2]:
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
         fig, axes = plt.subplots(1, len(met_vars), figsize=(5*len(met_vars), 5))
         for i, var in enumerate(met_vars):
-            sns.boxplot(x='stasiun', y=var, data=date_filtered, palette=palette, ax=axes[i])
+            sns.boxplot(x='stasiun', y=var, hue='stasiun', data=date_filtered, palette=palette, ax=axes[i], legend=False)
             axes[i].set_title(f"{var} per Stasiun")
             axes[i].tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
     
     # Visualisasi untuk Polutan Lainnya
     if compare_option in ["Polutan Lainnya", "Keduanya (PM & Lainnya)"]:
@@ -457,8 +483,9 @@ with tabs[2]:
         pollutants_other = ['NO2', 'SO2', 'CO', 'O3']
         fig, axes = plt.subplots(1, len(pollutants_other), figsize=(5*len(pollutants_other), 5))
         for i, pol in enumerate(pollutants_other):
-            sns.boxplot(x='stasiun', y=pol, data=date_filtered, palette=palette, ax=axes[i])
+            sns.boxplot(x='stasiun', y=pol, hue='stasiun', data=date_filtered, palette=palette, ax=axes[i], legend=False)
             axes[i].set_title(f"{pol} per Stasiun")
             axes[i].tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+        plt.close(fig)  # Tutup figure untuk menghemat memori
