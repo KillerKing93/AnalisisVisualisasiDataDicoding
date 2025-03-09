@@ -259,7 +259,7 @@ with tabs[0]:
                      palette={'Hari Kerja': 'lightblue', 'Akhir Pekan': 'orange'}, ax=ax)
         ax.set_xlabel("Tanggal")
         ax.set_ylabel(f"Konsentrasi {pollutant} (µg/m³)")
-        ax.legend(title="Jenis Hari")
+        ax.legend(title="Jenis Hari", loc='upper right')
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
@@ -316,7 +316,7 @@ with tabs[1]:
         sns.lineplot(x='tanggal', y='PM2.5', data=filtered_data, ax=ax, label='PM2.5', color='blue')
         ax.set_xlabel("Tanggal")
         ax.set_ylabel("Konsentrasi PM2.5 (µg/m³)")
-        ax.legend()
+        ax.legend(loc='upper right')
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
@@ -349,7 +349,7 @@ with tabs[1]:
         sns.lineplot(x='tanggal', y='PM10', data=filtered_data, ax=ax, label='PM10', color='green')
         ax.set_xlabel("Tanggal")
         ax.set_ylabel("Konsentrasi PM10 (µg/m³)")
-        ax.legend()
+        ax.legend(loc='upper right')
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
@@ -379,7 +379,6 @@ with tabs[1]:
     elif option == "PM2.5 & PM10":
         st.subheader("Tren Konsentrasi PM2.5 dan PM10")
         # Gunakan data agregat harian yang sudah dihitung sebelumnya
-        # Misalnya, untuk opsi ini kita gunakan kolom 'PM2.5'
         daily_avg = daily_avg_all[['stasiun', 'tanggal', 'PM2.5']]
         ylabel = "Rata-rata PM2.5 (µg/m³) (PM10 tidak ditampilkan)"
             
@@ -390,7 +389,7 @@ with tabs[1]:
             ax.plot(subset['tanggal'], subset['PM2.5'], label=stn, color=color, alpha=0.8)
         ax.set_xlabel("Tanggal")
         ax.set_ylabel(ylabel)
-        ax.legend()
+        ax.legend(loc='upper right')
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
@@ -401,7 +400,7 @@ with tabs[1]:
         sns.histplot(filtered_data['PM2.5'], bins=30, kde=True, ax=ax, color='blue', label='PM2.5', alpha=0.5)
         sns.histplot(filtered_data['PM10'], bins=30, kde=True, ax=ax, color='green', label='PM10', alpha=0.5)
         ax.set_xlabel("Konsentrasi (µg/m³)")
-        ax.legend()
+        ax.legend(loc='upper right')
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
@@ -445,7 +444,6 @@ with tabs[2]:
                                   ["PM2.5", "PM10", "Meteorologi", "Polutan Lainnya", "Keduanya (PM & Lainnya)"])
     
     st.write("**Tren Harian Rata-rata (Line Plot)**")
-    # Gunakan data agregat harian yang sudah dihitung sebelumnya
     if compare_option in ["PM2.5", "PM10", "Keduanya (PM & Lainnya)"]:
         if compare_option == "PM2.5":
             daily_avg = daily_avg_all[['stasiun', 'tanggal', 'PM2.5']]
@@ -464,17 +462,15 @@ with tabs[2]:
             ax.plot(subset['tanggal'], subset.iloc[:, 2], label=stn, color=color, alpha=0.8)
         ax.set_xlabel("Tanggal")
         ax.set_ylabel(ylabel)
-        ax.legend()
+        ax.legend(loc='upper right')
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
     
-    # Menyiapkan palet warna untuk perbandingan antar stasiun
     palette = {stn: ('orange' if stn == selected_station else 'lightblue') 
                for stn in date_filtered['stasiun'].unique()}
     
-    # Visualisasi khusus untuk PM2.5 dan PM10
     if compare_option in ["PM2.5", "PM10", "Keduanya (PM & Lainnya)"]:
         if compare_option in ["PM2.5", "Keduanya (PM & Lainnya)"]:
             st.write("**Distribusi PM2.5**")
@@ -497,7 +493,6 @@ with tabs[2]:
             st.pyplot(fig)
             plt.close(fig)
     
-    # Visualisasi untuk variabel Meteorologi
     if compare_option in ["Meteorologi", "Keduanya (PM & Lainnya)"]:
         st.subheader("Perbandingan Meteorologi Antar Stasiun")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
@@ -510,7 +505,6 @@ with tabs[2]:
         st.pyplot(fig)
         plt.close(fig)
     
-    # Visualisasi untuk Polutan Lainnya
     if compare_option in ["Polutan Lainnya", "Keduanya (PM & Lainnya)"]:
         st.subheader("Perbandingan Polutan Lainnya Antar Stasiun")
         pollutants_other = ['NO2', 'SO2', 'CO', 'O3']
