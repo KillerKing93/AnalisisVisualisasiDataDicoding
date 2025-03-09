@@ -13,6 +13,8 @@ Projek ini merupakan dashboard interaktif berbasis [Streamlit](https://streamlit
 
 Selain dashboard interaktif, terdapat pula file **notebook.ipynb** yang menyediakan analisis data lebih mendalam menggunakan Jupyter Notebook.
 
+Akses aplikasi di streamlit lewat link ini: [ProyekVisualisasiDataDicoding](https://killerking93-proyekvisualisasidatadicoding.streamlit.app/)
+
 ## Instalasi
 
 Pastikan Anda sudah menginstall Python (minimal versi 3.7) di sistem Anda.
