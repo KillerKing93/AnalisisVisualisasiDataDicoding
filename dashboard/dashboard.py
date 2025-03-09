@@ -10,16 +10,17 @@ import os
 
 # -----------------------------------------------------------------------------------
 # Deskripsi:
-# Dashboard interaktif berbasis Streamlit untuk analisis data kualitas udara dari
-# beberapa stasiun di Tionghoa. Fitur:
-# - Peta geospasial konsentrasi PM2.5 menggunakan Folium.
-# - Tab visualisasi: Statistik Stasiun, Tren & Hubungan, dan Perbandingan Antar Stasiun.
-# - Filter data berdasarkan stasiun dan rentang tanggal.
+# Kode ini merupakan dashboard interaktif berbasis Streamlit untuk menganalisis data
+# kualitas udara dari beberapa stasiun di Tionghoa. Fitur yang tersedia meliputi:
+# - Menampilkan peta geospasial konsentrasi PM2.5 menggunakan Folium.
+# - Menyediakan tab visualisasi: Statistik Stasiun, Tren & Hubungan, dan Perbandingan Antar Stasiun.
+# - Pengguna dapat memilih stasiun dan rentang tanggal untuk memfilter data.
 # -----------------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------------
 # Fungsi-fungsi dengan caching untuk optimisasi
 # -----------------------------------------------------------------------------------
+
 @st.cache_data
 def load_data(filepath):
     data = pd.read_csv(filepath)
@@ -42,24 +43,6 @@ def get_stations_filtered(data, start_date, end_date):
     filtered = filter_data(data, start_date, end_date)
     stations_filtered = {st: group for st, group in filtered.groupby('stasiun')}
     return filtered, stations_filtered
-
-@st.cache_data
-def precompute_metrics(data):
-    """Lakukan pre-kalkulasi pada dataset penuh untuk tiap stasiun.
-       Hasil pre-kalkulasi hanya digunakan apabila rentang tanggal tidak diubah."""
-    stats_dict = {}
-    for station in data['stasiun'].unique():
-        station_data = data[data['stasiun'] == station]
-        stats_dict[station] = {
-            'avg_pm25': station_data['PM2.5'].mean(),
-            'avg_pm10': station_data['PM10'].mean(),
-            'descriptive': pd.concat([
-                station_data['PM2.5'].describe().rename('PM2.5'),
-                station_data['PM10'].describe().rename('PM10')
-            ], axis=1),
-            'pollutants': station_data[['NO2', 'SO2', 'CO', 'O3']].mean()
-        }
-    return stats_dict
 
 # -----------------------------------------------------------------------------------
 # 1. Pemuatan Data dan Persiapan
@@ -84,10 +67,6 @@ coords = {
 data['latitude'] = data['stasiun'].map(lambda x: coords[x][0])
 data['longitude'] = data['stasiun'].map(lambda x: coords[x][1])
 
-# Lakukan pre-kalkulasi untuk data penuh dan simpan di session_state (hanya sekali saat startup)
-if 'precomputed_metrics' not in st.session_state:
-    st.session_state['precomputed_metrics'] = precompute_metrics(data)
-
 # -----------------------------------------------------------------------------------
 # 2. Sidebar: Pilihan Filter Data
 # -----------------------------------------------------------------------------------
@@ -98,9 +77,6 @@ st.sidebar.title("Kualitas Udara di Beberapa Stasiun di Tionghoa")
 selected_station = st.sidebar.selectbox("Pilih Stasiun", data['stasiun'].unique())
 tanggal_mulai = st.sidebar.date_input("Tanggal Mulai", value=data['tanggal'].min())
 tanggal_akhir = st.sidebar.date_input("Tanggal Akhir", value=data['tanggal'].max())
-
-# Tentukan apakah pengguna menggunakan rentang tanggal penuh
-full_range = (tanggal_mulai == data['tanggal'].min().date()) and (tanggal_akhir == data['tanggal'].max().date())
 
 # Filter data dan buat dictionary per stasiun (menggunakan caching)
 date_filtered, stations_filtered = get_stations_filtered(data, tanggal_mulai, tanggal_akhir)
@@ -140,45 +116,50 @@ tabs = st.tabs(["Statistik Stasiun", "Tren & Hubungan", "Perbandingan Antar Stas
 with tabs[0]:
     st.subheader(f"Statistik untuk Stasiun: {selected_station}")
     
-    # Gunakan pre-kalkulasi bila rentang tanggal penuh, jika tidak hitung ulang dari filter
-    if full_range:
-        pre_stats = st.session_state['precomputed_metrics'][selected_station]
-        avg_pm = pd.Series({'PM2.5': pre_stats['avg_pm25'], 'PM10': pre_stats['avg_pm10']})
-        stats_pm = pre_stats['descriptive']
-        avg_pollutants = pre_stats['pollutants']
-    else:
-        avg_pm = selected_data[['PM2.5', 'PM10']].mean()
-        stats_pm = pd.concat([
-            selected_data['PM2.5'].describe().rename('PM2.5'),
-            selected_data['PM10'].describe().rename('PM10')
-        ], axis=1)
-        avg_pollutants = selected_data[['NO2', 'SO2', 'CO', 'O3']].mean()
-    
-    # Pie Chart PM2.5 & PM10
+    # Kolom untuk dua pie chart
     col1, col2 = st.columns(2)
     with col1:
         st.write("**Proporsi Rata-rata PM2.5 & PM10**")
+        avg_pm = selected_data[['PM2.5', 'PM10']].mean()
         fig, ax = plt.subplots()
         ax.pie(avg_pm, labels=avg_pm.index, autopct='%1.1f%%', startangle=90)
         ax.axis('equal')
         plt.tight_layout()
         st.pyplot(fig)
+        
     with col2:
         st.write("**Proporsi Rata-rata Polutan Lainnya**")
+        pollutants = ['NO2', 'SO2', 'CO', 'O3']
+        avg_pollutants = selected_data[pollutants].mean()
         fig, ax = plt.subplots()
         ax.pie(avg_pollutants, labels=avg_pollutants.index, autopct='%1.1f%%', startangle=90)
         ax.axis('equal')
         plt.tight_layout()
         st.pyplot(fig)
     
+    # Statistik deskriptif untuk PM2.5 dan PM10
+    stats_pm = pd.concat([
+        selected_data['PM2.5'].describe().rename('PM2.5'),
+        selected_data['PM10'].describe().rename('PM10')
+    ], axis=1)
+    
+    # Heatmap korelasi polutan
+    st.subheader("Heatmap Korelasi Polutan")
+    pollutants_all = ['PM2.5', 'PM10', 'NO2', 'SO2', 'CO', 'O3']
+    corr = selected_data[pollutants_all].corr()
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.heatmap(corr, annot=True, cmap='coolwarm', ax=ax)
+    ax.tick_params(axis='x', rotation=45)
+    plt.tight_layout()
+    st.pyplot(fig)
+    
     st.write("**Statistik Deskriptif PM2.5 & PM10**")
     st.dataframe(stats_pm)
     
-    stats_pollutants = selected_data[['NO2', 'SO2', 'CO', 'O3']].describe().T
+    stats_pollutants = selected_data[pollutants].describe().T
     
     # Facet Plot tren polutan
     st.subheader("Facet Plot Tren Polutan")
-    pollutants_all = ['PM2.5', 'PM10', 'NO2', 'SO2', 'CO', 'O3']
     df_melt = selected_data[['tanggal'] + pollutants_all].melt(id_vars='tanggal', var_name='Pollutant', value_name='Concentration')
     g = sns.FacetGrid(df_melt, col="Pollutant", col_wrap=3, height=3, sharex=True, sharey=False)
     g.map(sns.lineplot, "tanggal", "Concentration")
@@ -188,7 +169,7 @@ with tabs[0]:
     plt.tight_layout()
     st.pyplot(g.fig)
     
-    # Visualisasi hubungan meteorologi dan polutan (dengan sample data)
+    # Visualisasi hubungan meteorologi dan polutan (menggunakan sample data)
     st.subheader("Visualisasi Hubungan Meteorologi dan Polutan")
     sample_df = get_sample(data)
     cols_corr = ['TEMP', 'PRES', 'DEWP', 'WSPM', 'NO2', 'SO2', 'CO']
@@ -216,7 +197,7 @@ with tabs[0]:
     plot_type = st.selectbox("Pilih Jenis Plot", 
                              ['Box Plot', 'Bar Plot', 'Line Plot', 'Heatmap', 'Pola Musiman', 'Pola Harian'])
     
-    # Tambahkan kolom jenis hari (Hari Kerja vs Akhir Pekan)
+    # Menentukan jenis hari (Hari Kerja vs Akhir Pekan)
     selected_data['hari'] = selected_data['tanggal'].dt.dayofweek
     selected_data['jenis_hari'] = selected_data['hari'].apply(lambda x: 'Akhir Pekan' if x >= 5 else 'Hari Kerja')
     
@@ -229,6 +210,7 @@ with tabs[0]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+    
     elif plot_type == 'Bar Plot':
         fig, ax = plt.subplots(figsize=(8, 5))
         sns.barplot(x='jenis_hari', y=pollutant, data=selected_data, 
@@ -238,6 +220,7 @@ with tabs[0]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+    
     elif plot_type == 'Line Plot':
         st.subheader(f"Tren Konsentrasi {pollutant} Seiring Waktu")
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -249,6 +232,7 @@ with tabs[0]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+    
     elif plot_type == 'Heatmap':
         st.subheader(f"Heatmap Rata-rata {pollutant} per Jam")
         selected_data['jam'] = selected_data['tanggal'].dt.hour
@@ -260,6 +244,7 @@ with tabs[0]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+    
     elif plot_type == 'Pola Musiman':
         st.subheader(f"Pola Musiman Konsentrasi {pollutant}")
         selected_data['bulan'] = selected_data['tanggal'].dt.month
@@ -270,6 +255,7 @@ with tabs[0]:
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+    
     elif plot_type == 'Pola Harian':
         st.subheader(f"Pola Harian Konsentrasi {pollutant}")
         selected_data['jam'] = selected_data['tanggal'].dt.hour
@@ -288,6 +274,7 @@ with tabs[0]:
 with tabs[1]:
     option = st.selectbox("Pilih jenis visualisasi", 
                           ["PM2.5", "PM10", "PM2.5 & PM10", "Dampak Meteorologi vs Polutan Lainnya"])
+    
     if option == "PM2.5":
         st.subheader("Tren Konsentrasi PM2.5")
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -309,13 +296,15 @@ with tabs[1]:
         
         st.subheader("Hubungan PM2.5 dengan Variabel Meteorologi")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
-        fig, axes = plt.subplots(1, len(met_vars), figsize=(4*len(met_vars), 4))
+        n_cols = len(met_vars)
+        fig, axes = plt.subplots(1, n_cols, figsize=(4*n_cols, 4))
         for i, var in enumerate(met_vars):
             sns.scatterplot(x=var, y='PM2.5', data=selected_data, ax=axes[i], color='blue')
             axes[i].set_title(f"{var} vs PM2.5")
             axes[i].tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+    
     elif option == "PM10":
         st.subheader("Tren Konsentrasi PM10")
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -337,13 +326,15 @@ with tabs[1]:
         
         st.subheader("Hubungan PM10 dengan Variabel Meteorologi")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
-        fig, axes = plt.subplots(1, len(met_vars), figsize=(4*len(met_vars), 4))
+        n_cols = len(met_vars)
+        fig, axes = plt.subplots(1, n_cols, figsize=(4*n_cols, 4))
         for i, var in enumerate(met_vars):
             sns.scatterplot(x=var, y='PM10', data=selected_data, ax=axes[i], color='green')
             axes[i].set_title(f"{var} vs PM10")
             axes[i].tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+    
     elif option == "PM2.5 & PM10":
         st.subheader("Tren Konsentrasi PM2.5 dan PM10")
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -368,7 +359,8 @@ with tabs[1]:
         
         st.subheader("Hubungan Variabel Meteorologi dengan PM2.5 dan PM10")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
-        fig, axes = plt.subplots(2, len(met_vars), figsize=(4*len(met_vars), 8), sharex=False, sharey=False)
+        n_cols = len(met_vars)
+        fig, axes = plt.subplots(2, n_cols, figsize=(4*n_cols, 8), sharex=False, sharey=False)
         for i, pol in enumerate(['PM2.5', 'PM10']):
             for j, var in enumerate(met_vars):
                 color = 'blue' if pol == 'PM2.5' else 'green'
@@ -377,11 +369,14 @@ with tabs[1]:
                 axes[i, j].tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
+    
     elif option == "Dampak Meteorologi vs Polutan Lainnya":
         st.subheader("Hubungan Variabel Meteorologi vs Polutan Lainnya")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
         pollutants_other = ['NO2', 'SO2', 'CO', 'O3']
-        fig, axes = plt.subplots(len(met_vars), len(pollutants_other), figsize=(4*len(pollutants_other), 4*len(met_vars)))
+        n_rows = len(met_vars)
+        n_cols = len(pollutants_other)
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(4*n_cols, 4*n_rows))
         for i, met in enumerate(met_vars):
             for j, pol in enumerate(pollutants_other):
                 sns.scatterplot(x=met, y=pol, data=selected_data, ax=axes[i, j])
@@ -421,10 +416,11 @@ with tabs[2]:
         plt.tight_layout()
         st.pyplot(fig)
     
-    # Palet warna untuk perbandingan antar stasiun
+    # Menyiapkan palet warna untuk visualisasi perbandingan antar stasiun
     palette = {stn: ('orange' if stn == selected_station else 'lightblue') 
                for stn in date_filtered['stasiun'].unique()}
     
+    # Visualisasi khusus untuk PM2.5 dan PM10
     if compare_option in ["PM2.5", "PM10", "Keduanya (PM & Lainnya)"]:
         if compare_option in ["PM2.5", "Keduanya (PM & Lainnya)"]:
             st.write("**Distribusi PM2.5**")
@@ -445,6 +441,7 @@ with tabs[2]:
             plt.tight_layout()
             st.pyplot(fig)
     
+    # Visualisasi untuk variabel Meteorologi
     if compare_option in ["Meteorologi", "Keduanya (PM & Lainnya)"]:
         st.subheader("Perbandingan Meteorologi Antar Stasiun")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
@@ -456,6 +453,7 @@ with tabs[2]:
         plt.tight_layout()
         st.pyplot(fig)
     
+    # Visualisasi untuk Polutan Lainnya
     if compare_option in ["Polutan Lainnya", "Keduanya (PM & Lainnya)"]:
         st.subheader("Perbandingan Polutan Lainnya Antar Stasiun")
         pollutants_other = ['NO2', 'SO2', 'CO', 'O3']
