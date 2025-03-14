@@ -11,13 +11,15 @@ import os
 # -----------------------------------------------------------------------------------
 # Deskripsi:
 # Dashboard interaktif berbasis Streamlit untuk menganalisis data kualitas udara
-# dari beberapa stasiun di Tionghoa. Fitur yang tersedia:
+# dari beberapa stasiun di Tionghoa, dirancang agar mudah dipahami oleh audiens non-teknis.
+# Fitur yang tersedia:
 # - Peta geospasial konsentrasi PM2.5 dengan Folium.
 # - Visualisasi lengkap yang meliputi:
 #    a. Statistik Stasiun
-#    b. Trend & Hubungan (termasuk trend bulanan, harian, dan hubungan dengan faktor meteorologi)
-#    c. Perbandingan Antar Stasiun
-#    d. Distribusi Waktu (per jam, hari dalam seminggu, dan perbandingan hari kerja vs. akhir pekan)
+#    b. Tren & Hubungan (tren bulanan, harian, hubungan dengan faktor meteorologi, dan pairplot)
+#    c. Perbandingan Antar Stasiun (menggunakan bar chart)
+#    d. Distribusi Waktu (menggunakan line chart dan bar chart)
+# Warna: Oranye untuk stasiun yang dipilih, Light Blue untuk stasiun lainnya.
 # -----------------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------------
@@ -109,24 +111,34 @@ st.sidebar.write("Dibuat oleh: Alif Nurhidayat\nEmail: alifnurhidayatwork@gmail.
 # 3. Peta Geospasial Konsentrasi PM2.5
 # -----------------------------------------------------------------------------------
 st.subheader("Peta Lokasi Stasiun")
-# Mendapatkan koordinat pusat dari stasiun yang dipilih
 center_lat, center_lon = station_data_dict[selected_station][['latitude', 'longitude']].iloc[0]
 m = folium.Map(location=[center_lat, center_lon], zoom_start=10)
 
-# Gunakan data teragregasi untuk setiap stasiun
-for idx, row in station_avg.iterrows():
+# Plot stasiun lain terlebih dahulu (light blue)
+for idx, row in station_avg[station_avg['stasiun'] != selected_station].iterrows():
     stasiun_name = row['stasiun']
     avg_pm25 = row['PM2.5']
     lat, lon = row['latitude'], row['longitude']
-    color = 'orange' if stasiun_name == selected_station else 'red'
     folium.CircleMarker(
         location=[lat, lon],
         radius=avg_pm25 / 10,
         popup=f"{stasiun_name}: {avg_pm25:.2f} µg/m³",
-        color=color,
+        color='lightblue',
         fill=True,
-        fill_color=color
+        fill_color='lightblue'
     ).add_to(m)
+
+# Plot stasiun yang dipilih terakhir agar di atas (oranye)
+selected_row = station_avg[station_avg['stasiun'] == selected_station].iloc[0]
+folium.CircleMarker(
+    location=[selected_row['latitude'], selected_row['longitude']],
+    radius=selected_row['PM2.5'] / 10,
+    popup=f"{selected_row['stasiun']}: {selected_row['PM2.5']:.2f} µg/m³",
+    color='orange',
+    fill=True,
+    fill_color='orange'
+).add_to(m)
+
 st_folium(m, width=700, height=500)
 
 # -----------------------------------------------------------------------------------
@@ -145,7 +157,7 @@ with tabs[0]:
         st.write("**Proporsi Rata-rata PM2.5 & PM10**")
         avg_pm = filtered_data[['PM2.5', 'PM10']].mean()
         fig, ax = plt.subplots()
-        ax.pie(avg_pm, labels=avg_pm.index, autopct='%1.1f%%', startangle=90)
+        ax.pie(avg_pm, labels=avg_pm.index, autopct='%1.1f%%', startangle=90, colors=['blue', 'green'])
         ax.axis('equal')
         plt.tight_layout()
         st.pyplot(fig)
@@ -156,7 +168,8 @@ with tabs[0]:
         pollutants = ['NO2', 'SO2', 'CO', 'O3']
         avg_pollutants = filtered_data[pollutants].mean()
         fig, ax = plt.subplots()
-        ax.pie(avg_pollutants, labels=avg_pollutants.index, autopct='%1.1f%%', startangle=90)
+        ax.pie(avg_pollutants, labels=avg_pollutants.index, autopct='%1.1f%%', startangle=90, 
+               colors=['lightblue', 'lightgreen', 'orange', 'red'])
         ax.axis('equal')
         plt.tight_layout()
         st.pyplot(fig)
@@ -182,10 +195,10 @@ with tabs[0]:
     
     stats_pollutants = filtered_data[pollutants].describe().T
     
-    st.subheader("Facet Plot Tren Polutan")
+    st.subheader("Tren Polutan")
     df_melt = filtered_data[['tanggal'] + pollutants_all].melt(id_vars='tanggal', var_name='Pollutant', value_name='Concentration')
     g = sns.FacetGrid(df_melt, col="Pollutant", col_wrap=3, height=3, sharex=True, sharey=False)
-    g.map(sns.lineplot, "tanggal", "Concentration")
+    g.map(sns.lineplot, "tanggal", "Concentration", color='lightblue')
     g.set_axis_labels("Tanggal", "Konsentrasi")
     for ax in g.axes.flat:
         ax.tick_params(axis='x', rotation=45)
@@ -201,35 +214,62 @@ with tabs[0]:
 # ===============================================================================
 with tabs[1]:
     option = st.selectbox("Pilih jenis visualisasi", 
-                          ["Trend Bulanan", "Tren Konsentrasi PM2.5 & Hubungan dengan Variabel Meteorologi", "Tren Konsentrasi PM10 & Hubungan dengan Variabel Meteorologi", "Tren Konsentrasi PM2.5 & PM10 Beserta Hubungan dengan Variabel Meteorologi", "Dampak Meteorologi vs Polutan Lainnya"])
+                          ["Tren Bulanan", "Tren Konsentrasi PM2.5 & Hubungan dengan Variabel Meteorologi", 
+                           "Tren Konsentrasi PM10 & Hubungan dengan Variabel Meteorologi", 
+                           "Tren Konsentrasi PM2.5 & PM10 Beserta Hubungan dengan Variabel Meteorologi", 
+                           "Dampak Meteorologi vs Polutan Lainnya", "Pairplot Polutan & Meteorologi"])
     
-    if option == "Trend Bulanan":
-        st.subheader("Trend Bulanan Konsentrasi PM2.5 dan PM10 (Semua Stasiun)")
+    if option == "Tren Bulanan":
+        st.subheader("Tren Bulanan Konsentrasi PM2.5 dan PM10 (Semua Stasiun)")
         df_temp = date_filtered.copy()
         df_temp.set_index('tanggal', inplace=True)
         trend_pm = df_temp.groupby('stasiun')[['PM2.5', 'PM10']].resample('ME').mean().reset_index()
         
-        # Plot trend bulanan PM2.5
+        # Plot PM2.5
         fig, ax = plt.subplots(figsize=(14, 6))
-        sns.lineplot(data=trend_pm, x='tanggal', y='PM2.5', hue='stasiun', marker='o', ax=ax)
-        ax.set_title('Trend Rata-rata Bulanan PM2.5 per Stasiun')
+        for stn in trend_pm['stasiun'].unique():
+            if stn != selected_station:
+                subset = trend_pm[trend_pm['stasiun'] == stn]
+                ax.plot(subset['tanggal'], subset['PM2.5'], label=stn, color='lightblue', marker='o', alpha=0.8)
+        subset_selected = trend_pm[trend_pm['stasiun'] == selected_station]
+        ax.plot(subset_selected['tanggal'], subset_selected['PM2.5'], label=selected_station, 
+                color='orange', marker='o', alpha=0.8)
+        ax.set_title('Tren Rata-rata Bulanan PM2.5 per Stasiun')
         ax.set_xlabel('Bulan')
         ax.set_ylabel('Konsentrasi PM2.5 (µg/m³)')
         ax.tick_params(axis='x', rotation=45)
+        ax.legend()
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
         
-        # Plot trend bulanan PM10
+        # Plot PM10
         fig, ax = plt.subplots(figsize=(14, 6))
-        sns.lineplot(data=trend_pm, x='tanggal', y='PM10', hue='stasiun', marker='o', ax=ax)
-        ax.set_title('Trend Rata-rata Bulanan PM10 per Stasiun')
+        for stn in trend_pm['stasiun'].unique():
+            if stn != selected_station:
+                subset = trend_pm[trend_pm['stasiun'] == stn]
+                ax.plot(subset['tanggal'], subset['PM10'], label=stn, color='lightblue', marker='o', alpha=0.8)
+        subset_selected = trend_pm[trend_pm['stasiun'] == selected_station]
+        ax.plot(subset_selected['tanggal'], subset_selected['PM10'], label=selected_station, 
+                color='orange', marker='o', alpha=0.8)
+        ax.set_title('Tren Rata-rata Bulanan PM10 per Stasiun')
         ax.set_xlabel('Bulan')
         ax.set_ylabel('Konsentrasi PM10 (µg/m³)')
         ax.tick_params(axis='x', rotation=45)
+        ax.legend()
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
+    
+    elif option == "Pairplot Polutan & Meteorologi":
+        st.subheader("Pairplot: Hubungan Polutan dan Variabel Meteorologi")
+        pair_vars = ['PM2.5', 'PM10', 'NO2', 'SO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'WSPM']
+        sampled_data = filtered_data[pair_vars].sample(n=1000, random_state=42)
+        sns.set(style="ticks")
+        pair_plot = sns.pairplot(sampled_data, diag_kind="kde", plot_kws={'color': 'orange'})
+        plt.tight_layout()
+        st.pyplot(pair_plot.figure)
+        plt.close(pair_plot.figure)
     
     elif option == "Tren Konsentrasi PM2.5 & Hubungan dengan Variabel Meteorologi":
         st.subheader("Tren Konsentrasi PM2.5")
@@ -238,15 +278,6 @@ with tabs[1]:
         ax.set_xlabel("Tanggal")
         ax.set_ylabel("Konsentrasi PM2.5 (µg/m³)")
         ax.legend(loc='upper right')
-        ax.tick_params(axis='x', rotation=45)
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
-        
-        st.subheader("Distribusi Konsentrasi PM2.5")
-        fig, ax = plt.subplots(figsize=(8, 5))
-        sns.histplot(filtered_data['PM2.5'], bins=30, kde=True, ax=ax, color='blue')
-        ax.set_xlabel("Konsentrasi PM2.5 (µg/m³)")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
@@ -276,15 +307,6 @@ with tabs[1]:
         st.pyplot(fig)
         plt.close(fig)
         
-        st.subheader("Distribusi Konsentrasi PM10")
-        fig, ax = plt.subplots(figsize=(8, 5))
-        sns.histplot(filtered_data['PM10'], bins=30, kde=True, ax=ax, color='green')
-        ax.set_xlabel("Konsentrasi PM10 (µg/m³)")
-        ax.tick_params(axis='x', rotation=45)
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
-        
         st.subheader("Hubungan PM10 dengan Variabel Meteorologi")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
         n_cols = len(met_vars)
@@ -299,27 +321,11 @@ with tabs[1]:
     
     elif option == "Tren Konsentrasi PM2.5 & PM10 Beserta Hubungan dengan Variabel Meteorologi":
         st.subheader("Tren Konsentrasi PM2.5 dan PM10")
-        daily_avg = daily_avg_all[['stasiun', 'tanggal', 'PM2.5']]
-        ylabel = "Rata-rata PM2.5 (µg/m³) (PM10 tidak ditampilkan)"
-            
         fig, ax = plt.subplots(figsize=(10, 5))
-        for stn in daily_avg['stasiun'].unique():
-            color = 'orange' if stn == selected_station else 'lightblue'
-            subset = daily_avg[daily_avg['stasiun'] == stn]
-            ax.plot(subset['tanggal'], subset['PM2.5'], label=stn, color=color, alpha=0.8)
+        sns.lineplot(x='tanggal', y='PM2.5', data=filtered_data, ax=ax, label='PM2.5', color='blue')
+        sns.lineplot(x='tanggal', y='PM10', data=filtered_data, ax=ax, label='PM10', color='green')
         ax.set_xlabel("Tanggal")
-        ax.set_ylabel(ylabel)
-        ax.legend(loc='upper right')
-        ax.tick_params(axis='x', rotation=45)
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
-        
-        st.subheader("Distribusi Konsentrasi PM2.5 dan PM10")
-        fig, ax = plt.subplots(figsize=(8, 5))
-        sns.histplot(filtered_data['PM2.5'], bins=30, kde=True, ax=ax, color='blue', label='PM2.5', alpha=0.5)
-        sns.histplot(filtered_data['PM10'], bins=30, kde=True, ax=ax, color='green', label='PM10', alpha=0.5)
-        ax.set_xlabel("Konsentrasi (µg/m³)")
+        ax.set_ylabel("Konsentrasi (µg/m³)")
         ax.legend(loc='upper right')
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
@@ -349,7 +355,7 @@ with tabs[1]:
         fig, axes = plt.subplots(n_rows, n_cols, figsize=(4*n_cols, 4*n_rows))
         for i, met in enumerate(met_vars):
             for j, pol in enumerate(pollutants_other):
-                sns.scatterplot(x=met, y=pol, data=filtered_data, ax=axes[i, j])
+                sns.scatterplot(x=met, y=pol, data=filtered_data, ax=axes[i, j], color='lightblue')
                 axes[i, j].set_title(f"{met} vs {pol}")
                 axes[i, j].tick_params(axis='x', rotation=45)
         plt.tight_layout()
@@ -357,7 +363,7 @@ with tabs[1]:
         plt.close(fig)
 
 # ===============================================================================
-# Tab 3: Perbandingan Antar Stasiun
+# Tab 3: Perbandingan Antar Stasiun (Menggunakan Bar Chart)
 # ===============================================================================
 with tabs[2]:
     compare_option = st.selectbox("Pilih variabel untuk perbandingan antar stasiun", 
@@ -377,128 +383,141 @@ with tabs[2]:
             
         fig, ax = plt.subplots(figsize=(10, 5))
         for stn in daily_avg['stasiun'].unique():
-            color = 'orange' if stn == selected_station else 'lightblue'
-            subset = daily_avg[daily_avg['stasiun'] == stn]
-            ax.plot(subset['tanggal'], subset.iloc[:, 2], label=stn, color=color, alpha=0.8)
+            if stn != selected_station:
+                subset = daily_avg[daily_avg['stasiun'] == stn]
+                ax.plot(subset['tanggal'], subset.iloc[:, 2], label=stn, color='lightblue', alpha=0.8)
+        subset_selected = daily_avg[daily_avg['stasiun'] == selected_station]
+        ax.plot(subset_selected['tanggal'], subset_selected.iloc[:, 2], label=selected_station, 
+                color='orange', alpha=0.8)
         ax.set_xlabel("Tanggal")
         ax.set_ylabel(ylabel)
-        ax.legend(loc='upper right')
+        ax.tick_params(axis='x', rotation=45)
+        ax.legend()
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close(fig)
+    
+    # Rata-rata PM2.5 per Stasiun
+    if compare_option in ["PM2.5", "Keduanya (PM & Lainnya)"]:
+        st.write("**Rata-rata PM2.5 per Stasiun**")
+        avg_pm25 = date_filtered.groupby('stasiun')['PM2.5'].mean().reset_index()
+        # Buat list warna: oranye untuk stasiun yang dipilih, lightblue untuk yang lain
+        colors = ['orange' if stn == selected_station else 'lightblue' for stn in avg_pm25['stasiun']]
+        fig, ax = plt.subplots(figsize=(10, 5))
+        sns.barplot(x='stasiun', y='PM2.5', data=avg_pm25, ax=ax, palette=colors)
+        ax.set_xlabel("Stasiun")
+        ax.set_ylabel("Rata-rata PM2.5 (µg/m³)")
+        ax.set_title("Rata-rata PM2.5 per Stasiun")
         ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
     
-    palette = {stn: ('orange' if stn == selected_station else 'lightblue') 
-               for stn in date_filtered['stasiun'].unique()}
+    # Rata-rata PM10 per Stasiun
+    if compare_option in ["PM10", "Keduanya (PM & Lainnya)"]:
+        st.write("**Rata-rata PM10 per Stasiun**")
+        avg_pm10 = date_filtered.groupby('stasiun')['PM10'].mean().reset_index()
+        # Buat list warna: oranye untuk stasiun yang dipilih, lightblue untuk yang lain
+        colors = ['orange' if stn == selected_station else 'lightblue' for stn in avg_pm10['stasiun']]
+        fig, ax = plt.subplots(figsize=(10, 5))
+        sns.barplot(x='stasiun', y='PM10', data=avg_pm10, ax=ax, palette=colors)
+        ax.set_xlabel("Stasiun")
+        ax.set_ylabel("Rata-rata PM10 (µg/m³)")
+        ax.set_title("Rata-rata PM10 per Stasiun")
+        ax.tick_params(axis='x', rotation=45)
+        plt.tight_layout()
+        st.pyplot(fig)
+        plt.close(fig)
     
-    if compare_option in ["PM2.5", "PM10", "Keduanya (PM & Lainnya)"]:
-        if compare_option in ["PM2.5", "Keduanya (PM & Lainnya)"]:
-            st.write("**Distribusi PM2.5**")
-            fig, ax = plt.subplots(figsize=(10, 5))
-            sns.boxplot(x='stasiun', y='PM2.5', hue='stasiun', data=date_filtered, palette=palette, ax=ax, legend=False)
-            ax.tick_params(axis='x', rotation=45)
-            ax.set_xlabel("Stasiun")
-            ax.set_ylabel("Konsentrasi PM2.5 (µg/m³)")
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close(fig)
-        if compare_option in ["PM10", "Keduanya (PM & Lainnya)"]:
-            st.write("**Distribusi PM10**")
-            fig, ax = plt.subplots(figsize=(10, 5))
-            sns.boxplot(x='stasiun', y='PM10', hue='stasiun', data=date_filtered, palette=palette, ax=ax, legend=False)
-            ax.tick_params(axis='x', rotation=45)
-            ax.set_xlabel("Stasiun")
-            ax.set_ylabel("Konsentrasi PM10 (µg/m³)")
-            plt.tight_layout()
-            st.pyplot(fig)
-            plt.close(fig)
-    
+    # Rata-rata Variabel Meteorologi per Stasiun
     if compare_option in ["Meteorologi", "Keduanya (PM & Lainnya)"]:
-        st.subheader("Perbandingan Meteorologi Antar Stasiun")
+        st.subheader("Rata-rata Variabel Meteorologi per Stasiun")
         met_vars = ['TEMP', 'DEWP', 'PRES', 'WSPM']
-        fig, axes = plt.subplots(1, len(met_vars), figsize=(5*len(met_vars), 5))
-        for i, var in enumerate(met_vars):
-            sns.boxplot(x='stasiun', y=var, hue='stasiun', data=date_filtered, palette=palette, ax=axes[i], legend=False)
-            axes[i].set_title(f"{var} per Stasiun")
-            axes[i].tick_params(axis='x', rotation=45)
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
+        for var in met_vars:
+            st.write(f"**Rata-rata {var} per Stasiun**")
+            avg_met = date_filtered.groupby('stasiun')[var].mean().reset_index()
+            # Buat list warna: oranye untuk stasiun yang dipilih, lightblue untuk yang lain
+            colors = ['orange' if stn == selected_station else 'lightblue' for stn in avg_met['stasiun']]
+            fig, ax = plt.subplots(figsize=(10, 5))
+            sns.barplot(x='stasiun', y=var, data=avg_met, ax=ax, palette=colors)
+            ax.set_xlabel("Stasiun")
+            ax.set_ylabel(f"Rata-rata {var}")
+            ax.set_title(f"Rata-rata {var} per Stasiun")
+            ax.tick_params(axis='x', rotation=45)
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
     
+    # Rata-rata Polutan Lainnya per Stasiun
     if compare_option in ["Polutan Lainnya", "Keduanya (PM & Lainnya)"]:
-        st.subheader("Perbandingan Polutan Lainnya Antar Stasiun")
+        st.subheader("Rata-rata Polutan Lainnya per Stasiun")
         pollutants_other = ['NO2', 'SO2', 'CO', 'O3']
-        fig, axes = plt.subplots(1, len(pollutants_other), figsize=(5*len(pollutants_other), 5))
-        for i, pol in enumerate(pollutants_other):
-            sns.boxplot(x='stasiun', y=pol, hue='stasiun', data=date_filtered, palette=palette, ax=axes[i], legend=False)
-            axes[i].set_title(f"{pol} per Stasiun")
-            axes[i].tick_params(axis='x', rotation=45)
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
+        for pol in pollutants_other:
+            st.write(f"**Rata-rata {pol} per Stasiun**")
+            avg_pol = date_filtered.groupby('stasiun')[pol].mean().reset_index()
+            # Buat list warna: oranye untuk stasiun yang dipilih, lightblue untuk yang lain
+            colors = ['orange' if stn == selected_station else 'lightblue' for stn in avg_pol['stasiun']]
+            fig, ax = plt.subplots(figsize=(10, 5))
+            sns.barplot(x='stasiun', y=pol, data=avg_pol, ax=ax, palette=colors)
+            ax.set_xlabel("Stasiun")
+            ax.set_ylabel(f"Rata-rata {pol}")
+            ax.set_title(f"Rata-rata {pol} per Stasiun")
+            ax.tick_params(axis='x', rotation=45)
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
 
 # ===============================================================================
-# Tab 4: Distribusi Waktu
+# Tab 4: Distribusi Waktu (Menggunakan Line Chart dan Bar Chart)
 # ===============================================================================
 with tabs[3]:
     st.subheader("Distribusi Berdasarkan Waktu")
     
-    # Pilih variabel yang ingin divisualisasikan
     variable_choice = st.selectbox(
         "Pilih Variabel",
         ['PM2.5', 'PM10', 'NO2', 'SO2', 'CO', 'O3', 'TEMP', 'PRES', 'DEWP', 'WSPM']
     )
     
-    # Pastikan kolom waktu sudah ada pada filtered_data
     filtered_data['hour'] = filtered_data['tanggal'].dt.hour
     filtered_data['day_of_week'] = filtered_data['tanggal'].dt.day_name()
     filtered_data['hari'] = filtered_data['tanggal'].dt.dayofweek
     filtered_data['jenis_hari'] = filtered_data['hari'].apply(lambda x: 'Akhir Pekan' if x >= 5 else 'Hari Kerja')
     
-    # 1. Boxplot variabel per Jam
-    st.write(f"**Boxplot {variable_choice} per Jam**")
-    fig, ax = plt.subplots(figsize=(14, 6))
-    sns.boxplot(data=filtered_data, x='hour', y=variable_choice, ax=ax, palette='Set3')
+    # 1. Line Chart: Tren Rata-rata per Jam
+    st.write(f"**Tren Rata-rata {variable_choice} per Jam**")
+    hourly_avg = filtered_data.groupby('hour')[variable_choice].mean().reset_index()
+    fig, ax = plt.subplots(figsize=(10, 5))
+    sns.lineplot(x='hour', y=variable_choice, data=hourly_avg, ax=ax, color='lightblue')
     ax.set_xlabel("Jam")
-    ax.set_ylabel(variable_choice)
-    ax.set_title(f"Distribusi {variable_choice} per Jam")
+    ax.set_ylabel(f"Rata-rata {variable_choice}")
+    ax.set_title(f"Tren Rata-rata {variable_choice} per Jam")
     plt.tight_layout()
     st.pyplot(fig)
     plt.close(fig)
     
-    # 2. Boxplot variabel per Hari dalam Seminggu
-    st.write(f"**Boxplot {variable_choice} per Hari (Day of Week)**")
+    # 2. Bar Chart: Rata-rata per Hari dalam Seminggu
+    st.write(f"**Rata-rata {variable_choice} per Hari dalam Seminggu**")
     order_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    fig, ax = plt.subplots(figsize=(14, 6))
-    sns.boxplot(data=filtered_data, x='day_of_week', y=variable_choice, order=order_days, ax=ax, palette='Set2')
+    daily_avg = filtered_data.groupby('day_of_week')[variable_choice].mean().reindex(order_days).reset_index()
+    fig, ax = plt.subplots(figsize=(10, 5))
+    sns.barplot(x='day_of_week', y=variable_choice, data=daily_avg, ax=ax, color='lightblue')
     ax.set_xlabel("Hari")
-    ax.set_ylabel(variable_choice)
-    ax.set_title(f"Distribusi {variable_choice} per Hari dalam Seminggu")
+    ax.set_ylabel(f"Rata-rata {variable_choice}")
+    ax.set_title(f"Rata-rata {variable_choice} per Hari dalam Seminggu")
+    ax.tick_params(axis='x', rotation=45)
     plt.tight_layout()
     st.pyplot(fig)
     plt.close(fig)
     
-    # 3. Boxplot perbandingan: Hari Kerja vs Akhir Pekan
-    st.write(f"**Boxplot {variable_choice}: Hari Kerja vs Akhir Pekan**")
+    # 3. Bar Chart: Rata-rata Hari Kerja vs Akhir Pekan
+    st.write(f"**Rata-rata {variable_choice}: Hari Kerja vs Akhir Pekan**")
+    workday_avg = filtered_data.groupby('jenis_hari')[variable_choice].mean().reset_index()
     fig, ax = plt.subplots(figsize=(8, 5))
-    sns.boxplot(data=filtered_data, x='jenis_hari', y=variable_choice, 
+    sns.barplot(x='jenis_hari', y=variable_choice, data=workday_avg, 
                 palette={'Hari Kerja': 'lightblue', 'Akhir Pekan': 'orange'}, ax=ax)
     ax.set_xlabel("Jenis Hari")
-    ax.set_ylabel(variable_choice)
-    ax.set_title(f"Perbandingan {variable_choice}: Hari Kerja vs Akhir Pekan")
-    plt.tight_layout()
-    st.pyplot(fig)
-    plt.close(fig)
-    
-    # 4. Bar Chart: Median nilai variabel berdasarkan Hari Kerja vs Akhir Pekan
-    st.write(f"**Bar Chart Median {variable_choice}: Hari Kerja vs Akhir Pekan**")
-    median_var = filtered_data.groupby('jenis_hari')[variable_choice].median().reset_index()
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sns.barplot(data=median_var, x='jenis_hari', y=variable_choice, 
-                palette={'Hari Kerja': 'lightblue', 'Akhir Pekan': 'orange'}, ax=ax)
-    ax.set_xlabel("Jenis Hari")
-    ax.set_ylabel(f"Median {variable_choice}")
-    ax.set_title(f"Median {variable_choice}: Hari Kerja vs Akhir Pekan")
+    ax.set_ylabel(f"Rata-rata {variable_choice}")
+    ax.set_title(f"Rata-rata {variable_choice}: Hari Kerja vs Akhir Pekan")
     plt.tight_layout()
     st.pyplot(fig)
     plt.close(fig)
